@@ -1,0 +1,9 @@
+/cnipa/
+/需求/
+*.txt
+*.jpg
+*.png
+使用说明.md
+login.py
+crawl.py
+.DS_Store
