@@ -38,8 +38,11 @@ class Crawl:
             os.makedirs("./cnipa/img")
         if not os.path.exists("./cnipa/pdf"):
             os.makedirs("./cnipa/pdf")
+        if not os.path.exists("./cnipa/error_pdf"):
+            os.makedirs("./cnipa/error_pdf")
         if not os.path.exists("./cnipa/error"):
             os.makedirs("./cnipa/error")
+            
 
     def encrypt(self,t, e="ABCDEF0123456789"):
         # 将密钥和明文编码为UTF-8
@@ -156,27 +159,28 @@ class Crawl:
     def main(self):
         df = pd.read_csv("./sample.csv",encoding="utf-8")
         keyword_nos = df["ida"].values.tolist()
-        records = pd.read_csv("./sample.csv",encoding="utf-8").to_dict(orient="records")[:2000]
+        records = pd.read_csv("./sample.csv",encoding="utf-8").to_dict(orient="records")
         browser = ChromiumPage(5)
         browser.get("https://tysf.cponline.cnipa.gov.cn/am/#/user/login")
         self.login(browser)
         
         error_fp = open("./cnipa/error/error.txt","a",encoding="utf-8")
-        latest_file, latest_time = self.get_latest_modified_file("./cnipa/pdf")
+        # latest_file, latest_time = self.get_latest_modified_file("./cnipa/pdf")
 
-        if latest_file:
-            print(f"Latest modified file: {latest_file}")
-            print(f"Last modified time: {latest_time}")
-            _index = keyword_nos.index(latest_file.replace("CN", "").replace(".pdf", ""))
-        else:
-            print("No files found in the folder.")
-            _index = 0
+        # if latest_file:
+        #     print(f"Latest modified file: {latest_file}")
+        #     print(f"Last modified time: {latest_time}")
+        #     _index = keyword_nos.index(latest_file.replace("CN", "").replace(".pdf", ""))
+        # else:
+        #     print("No files found in the folder.")
+        #     _index = 0
         for record_index,record in enumerate(records):
             print("第",record_index,"个:",record)
-            if  record_index < _index:
-                continue
+            # if  record_index < _index:
+            #     continue
+            # record["ida"] = "201010121746X"
             keyword_no = record["ida"]
-            if os.path.exists(f"./cnipa/pdf/CN{keyword_no}.pdf"):
+            if os.path.exists(f"./cnipa/pdf/CN{keyword_no}.pdf") or os.path.exists(f"./cnipa/error_pdf/CN{keyword_no}.pdf"):
                 continue
             # browser.get("https://cpquery.cponline.cnipa.gov.cn/chinesepatent/index")
             # _cookies = browser.cookies()
@@ -205,9 +209,11 @@ class Crawl:
                 # https://cpquery.cponline.cnipa.gov.cn/detail/index?zhuanlisqh=Jgo%252BEM66xoh0Cy5SGswg7Q%253D%253D&anjianbh
                 browser.get(f"https://cpquery.cponline.cnipa.gov.cn/detail/index?zhuanlisqh={encrypt_param}&anjianbh")
                 
-                browser.listen.start("/api/view/gn/fetch-file-infos")
+                
                 refresh_count = 0
                 error_count = 0
+                status = "审查信息"
+                
                 while True:
                     try:
                         if "verify-img-panel" in browser.html or "确定" in browser.html:
@@ -220,22 +226,46 @@ class Crawl:
                         #     refresh_count = 0
                         if error_count >= 2:
                             break
+                        if status == "审查信息":
+                            browser.listen.start("/api/view/gn/scxx")
+                        # status = "审查信息"
                         browser.ele('xpath://span[@class="custom-tree-node"]//span[contains(text(),"审查信息")]',timeout=5).click()
+                        if status == "审查信息":
+                            res = browser.listen.wait(timeout=10)
+                            sc_response = res._raw_body
+                            if "url" in sc_response and "/api/view/gn/scxx/tzs" in sc_response:
+                                browser.listen.start("/api/view/gn/scxx/tzs")
+                                status = "通知书"
+                            else:
+                                error_count += 1
+                        
                         print("审查信息")
                         browser.ele("xpath://span[@class='custom-tree-node']//span[contains(text(),'通知书')]",timeout=5).click()
                         print("点击通知书")
+                        if status == "通知书":
+                            res = browser.listen.wait(timeout=10)
+                            tzs_response = res._raw_body
+                            if "url" in tzs_response and "第一次审查意见通知书" in tzs_response:
+                                status = "第一次审查意见通知书"
+                                browser.listen.start("/api/view/gn/fetch-file-infos")
+                            else:
+                                error_count += 1
                         browser.ele("xpath://span[@class='custom-tree-node']//span[contains(text(),'第一次审查意见通知书')]",timeout=5).click()
                         browser.ele("xpath://span[@class='custom-tree-node']//span[contains(text(),'第一次审查意见通知书')]",timeout=5).click()
                         print("点击第一次审查意见通知书")
-                        res = browser.listen.wait(timeout=10)
-                        _response = json.loads(res._raw_body)
-                        _response["data"]["ossLujingList"]
-                        break
+                        if status == "第一次审查意见通知书":
+                            res = browser.listen.wait(timeout=10)
+                            _response = json.loads(res._raw_body)
+                            _response["data"]["ossLujingList"]
+                            break
                     except Exception as e:
-                        print("error:",str(e))
-                        if "第一次审查意见通知书" in str(e):
-                            error_count += 1
-                        if '_raw_body' in str(e):
+                        print("error:",str(e),status)
+                        # if ("第一次审查意见通知书" in str(e) and "第一次审查意见通知书" not in browser.html):
+                        #     error_count += 1
+                        if "通知书" == status and '_raw_body' in str(e):
+                            browser.refresh()
+                            time.sleep(5)
+                        if "第一次审查意见通知书" == status and '_raw_body' in str(e):
                             browser.refresh()
                             refresh_count += 1
                             time.sleep(5)
@@ -245,6 +275,8 @@ class Crawl:
                     error_fp.flush()
                     continue
                 if error_count >= 2:
+                    with open(f"./cnipa/error_pdf/CN{keyword_no}.pdf","w",) as fp:
+                        fp.write("")
                     continue
                 # res = browser.listen.wait()
                 _cookies = browser.cookies()
