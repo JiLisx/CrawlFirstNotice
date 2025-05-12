@@ -14,7 +14,7 @@ import pandas as pd
 from urllib.parse import quote
 import cv2
 
-
+#   作者:noob
 #   2025/02/14 15:49
 
 
@@ -126,8 +126,8 @@ class Crawl:
         try:
             if 'https://cpquery.cponline.cnipa.gov.cn/chinesepatent/index' == "":
                 browser.ele('xpath://span[contains(text(),"确定")]').click()
-            browser.ele('xpath://input[@placeholder="手机号/证件号码"]').input("18800269809")
-            browser.ele('xpath://input[@placeholder="请输入密码"]').input("Liji2014.")
+            browser.ele('xpath://input[@placeholder="手机号/证件号码"]').input("")
+            browser.ele('xpath://input[@placeholder="请输入密码"]').input("")
             browser.ele('xpath://button[@class="el-button login-btn el-button--default el-button--medium"]').click()
             while "verify-img-panel" in browser.html:
                 time.sleep(2)
@@ -157,10 +157,8 @@ class Crawl:
             pass
 
     def main(self):
-        df = pd.read_csv("./sample.csv",encoding="utf-8")
-        keyword_nos = df["ida"].values.tolist()
-        records = pd.read_csv("./sample.csv",encoding="utf-8").to_dict(orient="records")
-        browser = ChromiumPage(5)
+        records = pd.read_csv("./after_2010.csv",encoding="utf-8").to_dict(orient="records")[30001:]
+        browser = ChromiumPage(5001)
         browser.get("https://tysf.cponline.cnipa.gov.cn/am/#/user/login")
         self.login(browser)
         
@@ -178,7 +176,6 @@ class Crawl:
             print("第",record_index,"个:",record)
             # if  record_index < _index:
             #     continue
-            # record["ida"] = "201010121746X"
             keyword_no = record["ida"]
             if os.path.exists(f"./cnipa/pdf/CN{keyword_no}.pdf") or os.path.exists(f"./cnipa/error_pdf/CN{keyword_no}.pdf"):
                 continue
@@ -237,7 +234,7 @@ class Crawl:
                                 browser.listen.start("/api/view/gn/scxx/tzs")
                                 status = "通知书"
                             else:
-                                error_count += 1
+                                error_count = 2
                         
                         print("审查信息")
                         browser.ele("xpath://span[@class='custom-tree-node']//span[contains(text(),'通知书')]",timeout=5).click()
@@ -249,7 +246,7 @@ class Crawl:
                                 status = "第一次审查意见通知书"
                                 browser.listen.start("/api/view/gn/fetch-file-infos")
                             else:
-                                error_count += 1
+                                error_count = 2
                         browser.ele("xpath://span[@class='custom-tree-node']//span[contains(text(),'第一次审查意见通知书')]",timeout=5).click()
                         browser.ele("xpath://span[@class='custom-tree-node']//span[contains(text(),'第一次审查意见通知书')]",timeout=5).click()
                         print("点击第一次审查意见通知书")
@@ -262,9 +259,6 @@ class Crawl:
                         print("error:",str(e),status)
                         # if ("第一次审查意见通知书" in str(e) and "第一次审查意见通知书" not in browser.html):
                         #     error_count += 1
-                        if "通知书" == status and '_raw_body' in str(e):
-                            browser.refresh()
-                            time.sleep(5)
                         if "第一次审查意见通知书" == status and '_raw_body' in str(e):
                             browser.refresh()
                             refresh_count += 1
