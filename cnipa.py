@@ -14,7 +14,6 @@ import pandas as pd
 from urllib.parse import quote
 import cv2
 
-#   作者:noob
 #   2025/02/14 15:49
 
 
