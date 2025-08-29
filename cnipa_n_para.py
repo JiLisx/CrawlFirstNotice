@@ -312,6 +312,14 @@ class Crawl:
         browser.get("https://tysf.cponline.cnipa.gov.cn/am/#/user/login")
         self.login(username, password)
         
+        # 读取已经处理过的错误记录
+        error_set = set()
+        error_file_path = f"./{self.output_dir}/error/error.txt"
+        if os.path.exists(error_file_path):
+            with open(error_file_path, "r", encoding="utf-8") as fp:
+                for line in fp:
+                    error_set.add(line.strip())
+
         error_fp = open(f"./{self.output_dir}/error/error.txt","a",encoding="utf-8")
         # latest_file, latest_time = self.get_latest_modified_file(f"./{self.output_dir}/pdf")
         # self.access_token = browser.run_js("return localStorage.ACCESS_TOKEN")
@@ -322,7 +330,11 @@ class Crawl:
             #     continue
             # record["ida_checksum"] = "201010121746X"
             keyword_no = record["ida_checksum"]
-            if os.path.exists(f"./{self.output_dir}/pdf/CN{keyword_no}_第一次.pdf") or os.path.exists(f"./{self.output_dir}/error_pdf/CN{keyword_no}.pdf"):
+            # 修改跳过逻辑：检查PDF文件存在 OR 在错误列表中
+            if (os.path.exists(f"./{self.output_dir}/pdf/CN{keyword_no}_第一次.pdf") or 
+                os.path.exists(f"./{self.output_dir}/error_pdf/CN{keyword_no}.pdf") or
+                keyword_no in error_set):  # 添加这行检查
+                print(f"跳过 {keyword_no}：已处理或在错误列表中")
                 continue
        
             response = {
@@ -365,6 +377,7 @@ class Crawl:
                 if refresh_count >= 5:
                     error_fp.write(str(_record["zhuanlisqh"]) + "\n")
                     error_fp.flush()
+                    error_set.add(_record["zhuanlisqh"])  # 确保内存中的set也更新
                     continue
                 if error_count >= 2:
                     with open(f"./{self.output_dir}/error_pdf/CN{keyword_no}.pdf","w",) as fp:
