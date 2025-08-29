@@ -248,11 +248,8 @@ class Crawl:
         data = {"zhuanlisqh":zhuanlisqh,"rid":rid,"ds":"TZS","wenjiandm":wenjiandm}
         cookies = self.get_cookies()
         code_401_count = 0
-        error_count = 0
         while True:
             try:
-                if error_count >= 5:
-                    return None
                 if code_401_count >= 10:
                     self.access_token = self.browser.run_js("return localStorage.ACCESS_TOKEN")
                     headers["Authorization"] = "Bearer " + self.access_token
@@ -264,15 +261,11 @@ class Crawl:
                 if response.status_code != 200:
                     cookies = self.get_cookies()
                     continue
-                response = response.json()
-                if response["code"] != 200:
-                    error_count += 1
-                    continue
-                response["data"]
+                response.json()["data"]
                 break
             except Exception as e:
                 print("error:",str(e))
-        return response
+        return response.json()
 
         
         
@@ -299,9 +292,9 @@ class Crawl:
         return cookies
 
     def main(self):
-        df = pd.read_csv("./test.csv",encoding="utf-8")[0:]
+        df = pd.read_csv("./after_2010.csv",encoding="utf-8")[1000000:1050000]
         keyword_nos = df["ida"].values.tolist()
-        records = df.to_dict(orient="records")
+        records = pd.read_csv("./after_2010.csv",encoding="utf-8").to_dict(orient="records")
         self.browser = browser = ChromiumPage(10)
         browser.get("https://tysf.cponline.cnipa.gov.cn/am/#/user/login")
         self.login()
@@ -325,7 +318,7 @@ class Crawl:
                 }
             }
             for _record in response["data"]["records"]:
-                encrypt_param = quote(self.encrypt(str(_record["zhuanlisqh"])))
+                encrypt_param = quote(self.encrypt(_record["zhuanlisqh"]))
                 # https://cpquery.cponline.cnipa.gov.cn/detail/index?zhuanlisqh=Jgo%252BEM66xoh0Cy5SGswg7Q%253D%253D&anjianbh
                 self.url = f"https://cpquery.cponline.cnipa.gov.cn/detail/index?zhuanlisqh={encrypt_param}&anjianbh"
                 browser.get(self.url)
@@ -369,17 +362,7 @@ class Crawl:
                 for tzs in tzs_response["data"]:
                     if "审查意见通知书" not in  tzs["name"]:
                         continue
-                    _date = tzs["name"].split()[0]
-                    _name = tzs["name"].split()[-1].replace("审查意见通知书", "")
-                    if "第N次" in _name:
-                        output_pdf = f"./cnipa/pdf/CN{keyword_no}_{_name}_{_date}.pdf"  # 输出的 PDF 文件名
-                    else:
-                        output_pdf = f"./cnipa/pdf/CN{keyword_no}_{_name}.pdf"  # 输出的 PDF 文件名
                     _response = self.get_fileinfo(_record["zhuanlisqh"],tzs["additionalData"]["rid"],tzs["additionalData"]["wenjiandm"])
-                    if not _response:
-                        with open(output_pdf.replace("/pdf/", "/error_pdf/"),"w",) as fp:
-                            fp.write("")
-                        continue
                     cookies = self.get_cookies()
                     print(_response)
                     if _response["data"]["wenjianhzm"] == "pdf":
@@ -395,7 +378,12 @@ class Crawl:
                                     break
                                 except:
                                     pass
-                            
+                            _date = tzs["name"].split()[0]
+                            _name = tzs["name"].split()[-1].replace("审查意见通知书", "")
+                            if "第N次" in _name:
+                                output_pdf = f"./cnipa/pdf/CN{keyword_no}_{_name}_{_date}.pdf"  # 输出的 PDF 文件名
+                            else:
+                                output_pdf = f"./cnipa/pdf/CN{keyword_no}_{_name}.pdf"  # 输出的 PDF 文件名
                             with open(output_pdf,"wb") as fp:
                                 fp.write(content)  
                             
